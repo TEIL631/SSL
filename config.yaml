@@ -1,0 +1,86 @@
+
+########### 說明區 ##########
+#
+#
+#
+#############################
+
+hp:
+  # types of task: S/P/R/R_Mixup/R_SA_Mixup
+  task: 'S'
+
+  # Dataset: wm811k/mitbih
+  dataset: 'wm811k'
+
+  repeat_times: 2
+
+  # 
+  # s model
+  n_epoch_for_s_model: 300 #300
+  max_esc_for_s_model: 300 #100
+
+  # pl model
+  n_epoch_for_pl_model: 300
+  max_esc_for_pl_model: 300
+  
+  # Pseudolabeling
+  pl_rate: 0.5
+  pl_round: 5
+  pl_max_esc: 5
+
+  pl_n_limit: 10000
+  pl_threshold: 0
+  
+  # optimizer:adam/ranger, lr:0.0001/0.001
+  optimizer: 'adam'
+  lr: 0.0001
+
+  weight_decay: 0.0005
+  drop_out: 0.2
+  momentum: 0.9
+
+  # Batch
+  accumulate_gradient: true
+  train_batch: 8
+  val_batch: 8
+  # matters if only accumulate_gradient is true, should be a dividend of train/val batch.
+  train_batch_after_accumulate: 64
+  n_worker: 2
+
+  w_wm811k: 32
+  h_wm811k: 32
+  w_mitbih: 128
+  h_mitbih: 128  
+  
+  log: true                              
+  num_pl: 300             
+  num_epoch: 300          
+  num_round: 5          
+  max_esc: 300
+
+  alpha: 0.2
+  beta: 0.8
+path:
+  # Wide-Resnet
+  # s_model_pretrained: 'models_pretrained/s_model_balance.pth'
+
+  # # WM811K
+  # img_list_wm811k: 'data/wm811k/train_3150_data.npy'
+  # indice_list_wm811k:  'data/wm811k/train_3150_10p_label_indices.npy'
+  # label_list_wm811k: 'data/wm811k/train_3150_10p_label_values.npy'
+  
+  # test_img_list_wm811k: 'data/wm811k/test_700_data.npy'
+  # test_indice_list_wm811k: 'data/wm811k/test_700_label_indices.npy'
+  # test_label_list_wm811k: 'data/wm811k/test_700_label_values.npy'  
+
+  # MITBIH
+  # img_list_mitbih: 'data/MITBIH/train_data_2D_2000.npy'
+  # img_list_mitbih: 'data/MITBIH2/train_data_2D_2000.npy'
+
+  # # Testing data
+  # # test_img_list_mitbih: 'data/MITBIH/test_data_2D_500.npy'
+  # test_img_list_mitbih: 'data/MITBIH2/test_data_2D_500.npy'
+  # # test_label_list_mitbih: 'data/MITBIH/test_2D_500_label_values.npy'
+  # test_label_list_mitbih: 'data/MITBIH2/test_2D_500_label_values.npy'
+
+  # traintools.py, loaders.py -> revise path to this file if needed

@@ -1,0 +1,4 @@
+/checkpoints/*
+/records/*
+__pycache__/*
+MITBIH/*
