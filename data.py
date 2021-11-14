@@ -81,7 +81,7 @@ class MyDataset_mixup(Dataset):
 
 def init():
     config = yaml.load(open('./config.yaml', 'r'), Loader=yaml.FullLoader)
-    task = config['hp']['task']
+    dataset = config['hp']['dataset']
     # print(config)
     # Constants
     global N_CLASS
@@ -96,7 +96,7 @@ def init():
     global PATH_LABELS_OF_VAL_DATA
     global PATH_TEST_IMAGES
     global PATH_LABELS_OF_TEST_DATA
-    if task == 'mitbih':
+    if dataset == 'mitbih':
         N_CLASS = 5
         RESIZE_SHAPE = (128, 128)
         TRAIN_BATCH = config['hp']['train_batch']
