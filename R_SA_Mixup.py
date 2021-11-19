@@ -294,6 +294,7 @@ def initExperiment(config):
     global NUM_EPOCH          
     global NUM_ROUND          
     global MAX_ESC
+    global OPTIM
     global my_alpha
     global my_beta
     global accumulate_gradient
@@ -315,6 +316,7 @@ def initExperiment(config):
     train_batch = config['hp']['train_batch']
     train_batch_after_accumulate = config['hp']['train_batch_after_accumulate']
     accumulate_iter = int(train_batch_after_accumulate / train_batch)
+    OPTIM = config['hp']['optimizer']
 
 
     tpe = pytz.timezone('Asia/Taipei')
