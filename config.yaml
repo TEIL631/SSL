@@ -55,11 +55,13 @@ hp:
   log: true                              
   num_pl: 300             
   num_epoch: 300         
-  num_round: 1          
+  num_round: 0          
   max_esc: 300
 
   alpha: 0.2
   beta: 0.8
+
+  pretrained: false
 path:
   # Wide-Resnet
   # s_model_pretrained: 'models_pretrained/s_model_balance.pth'

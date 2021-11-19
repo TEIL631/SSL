@@ -241,6 +241,9 @@ def initExperiment(config):
     print(limitedData.RESIZE_SHAPE)
     print(device)
     supervisedModel = Wide_ResNet(28, 10, 0.2, limitedData.N_CLASS, data_shape=limitedData.RESIZE_SHAPE)
+    if config['hp']['pretrained']:
+        checkpoint = torch.load(config['path']['pretrained_S'])
+        supervisedModel.load_state_dict(checkpoint['state_dict'])
     supervisedModel.to(device)
     supervisedModel = torch.nn.DataParallel(supervisedModel)
 

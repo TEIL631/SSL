@@ -332,6 +332,10 @@ def initExperiment(config):
     criterion_a = torch.nn.MSELoss(size_average=True)
     supervisedModel_preMixup = Wide_ResNet_preMixup_final(28, 10, 0.2, limitedData.N_CLASS, data_shape=limitedData.RESIZE_SHAPE)
     supervisedModel_postMixup = Wide_ResNet_postMixup_final(28, 10, 0.2, limitedData.N_CLASS, data_shape=limitedData.RESIZE_SHAPE)
+    if config['hp']['pretrained']:
+        checkpoint = torch.load(config['path']['pretrained_mixup'])
+        supervisedModel_preMixup.load_state_dict(checkpoint['state_dict_preMixup'])
+        supervisedModel_postMixup.load_state_dict(checkpoint['state_dict_postMixup'])
     supervisedModel_preMixup.to(device)
     supervisedModel_postMixup.to(device)
 
