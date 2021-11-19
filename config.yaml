@@ -12,12 +12,12 @@ hp:
   # Dataset: wm811k/mitbih
   dataset: 'wm811k'
 
-  repeat_times: 2
+  repeat_times: 5
 
   # 
   # s model
-  n_epoch_for_s_model: 300 #300
-  max_esc_for_s_model: 300 #100
+  n_epoch_for_s_model: 20 #300
+  max_esc_for_s_model: 20 #100
 
   # pl model
   n_epoch_for_pl_model: 300
@@ -54,8 +54,8 @@ hp:
   
   log: true                              
   num_pl: 300             
-  num_epoch: 300          
-  num_round: 5          
+  num_epoch: 300         
+  num_round: 1          
   max_esc: 300
 
   alpha: 0.2

@@ -2,3 +2,4 @@
 /records/*
 __pycache__/*
 MITBIH/*
+/models/__pycache__/*

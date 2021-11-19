@@ -210,7 +210,8 @@ def initExperiment(config):
     global criterionForSupervisedModel
     global optimizerForSupervisedModel
     global LOG                
-    global LR                 
+    global LR
+    global OPTIM                 
     global NUM_PL             
     global NUM_EPOCH          
     global NUM_ROUND          
@@ -234,6 +235,8 @@ def initExperiment(config):
 
     tpe = pytz.timezone('Asia/Taipei')
     EXPERIMENT_NAME = datetime.now(tpe).strftime("%Y-%m-%d %H:%M:%S")
+
+    OPTIM = config['hp']['optimizer']
 
     print(limitedData.N_CLASS)
     print(limitedData.RESIZE_SHAPE)
