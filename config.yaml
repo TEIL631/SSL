@@ -7,7 +7,7 @@
 
 hp:
   # types of task: S/P/R/R_Mixup/R_SA_Mixup
-  task: 'S'
+  task: 'R_Mixup'
 
   # Dataset: wm811k/mitbih
   dataset: 'wm811k'
@@ -31,7 +31,7 @@ hp:
   pl_n_limit: 10000
   pl_threshold: 0
   
-  # optimizer:adam/ranger, lr:0.0001/0.001
+  # optimizer:adam/Ranger, lr:0.0001/0.001
   optimizer: 'adam'
   lr: 0.0001
 
@@ -54,7 +54,7 @@ hp:
   
   log: true                              
   num_pl: 300             
-  num_epoch: 300         
+  num_epoch: 10         
   num_round: 0          
   max_esc: 300
 

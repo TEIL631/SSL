@@ -15,6 +15,8 @@ PATH_INDICES_OF_VAL_DATA = None
 PATH_LABELS_OF_VAL_DATA = None
 PATH_TEST_IMAGES = None
 PATH_LABELS_OF_TEST_DATA = None
+transformWithAffine = None
+transformWithoutAffine = None
 
 class MyDataset(Dataset):
     def __init__(self, data, transform=None, **kwargs):
@@ -155,7 +157,7 @@ def init():
     global labelsOfTestData; labelsOfTestData = np.load(PATH_LABELS_OF_TEST_DATA, allow_pickle=True)
     global numOfTestData; numOfTestData       = len(testImages)
 
-    transformWithAffine = transforms.Compose([
+    global transformWithAffine; transformWithAffine = transforms.Compose([
     transforms.ToTensor(),
     transforms.Resize(RESIZE_SHAPE),
     transforms.RandomHorizontalFlip(),
@@ -164,7 +166,7 @@ def init():
     transforms.Normalize((0.0/255), (2.0/255))
     ])
 
-    transformWithoutAffine = transforms.Compose([
+    global transformWithoutAffine; transformWithoutAffine = transforms.Compose([
     transforms.ToTensor(),
     transforms.Resize(RESIZE_SHAPE),
     transforms.Normalize((0.0/255), (2.0/255))

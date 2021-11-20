@@ -93,6 +93,8 @@ def initExperiment(config):
     global train_batch
     global train_batch_after_accumulate
     global accumulate_iter
+    global device
+    
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     LOG = config['hp']['log']
     LR = config['hp']['lr']
