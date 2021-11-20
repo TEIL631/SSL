@@ -54,7 +54,7 @@ hp:
   
   log: true                              
   num_pl: 300             
-  num_epoch: 10         
+  num_epoch: 300         
   num_round: 0          
   max_esc: 300
 

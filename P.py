@@ -427,6 +427,7 @@ def plot():
     plt.close()
 
 def main(config):
+    statistics.init()
     initExperiment(config)
     print("BATCH_SIZE = ", limitedData.TRAIN_BATCH)
     print("NUM_EPOCH = ", NUM_EPOCH)
