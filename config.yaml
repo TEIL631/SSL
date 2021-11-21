@@ -61,7 +61,7 @@ hp:
   alpha: 0.2
   beta: 0.8
 
-  pretrained: true
+  pretrained: false
 path:
   # Wide-Resnet
   # s_model_pretrained: 'models_pretrained/s_model_balance.pth'

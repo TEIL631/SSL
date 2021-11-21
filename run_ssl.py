@@ -18,7 +18,7 @@ for _ in range(repeat_times):
         R.main(config)
     elif task == 'P':
         P.main(config)
-    elif task = 'S_Mixup':
+    elif task == 'S_Mixup':
         S_Mixup.main(config)
     elif task == 'R_Mixup':
         R_Mixup.main(config)

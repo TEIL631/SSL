@@ -203,7 +203,6 @@ def init(config):
     global unlabeledDataset   ; unlabeledDataset    = None
     global unlabeledDataLoader; unlabeledDataLoader = None
 
-init()
 
 def summary():
     print(f'''[Data Hierarchy]
