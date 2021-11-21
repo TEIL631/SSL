@@ -2,63 +2,207 @@ import numpy as np
 from termcolor import cprint
 from tqdm import tqdm
 import torch # GPU
+import yaml
 from datetime import datetime
 import pytz
+from shutil import copyfile
 from matplotlib import pyplot as plt
 from matplotlib.ticker import FormatStrFormatter
-from shutil import copyfile
-from models import Wide_ResNet, VAE, SimpleNN3 # Models
+from models import Wide_ResNet, SimpleNN3, VAE, Wide_ResNet_preMixup_final, Wide_ResNet_postMixup_final# Models
+from resnet_vae import VAE_mitbih
 from torch.utils.data import DataLoader
 import statistics
 from pathlib import Path
 from ipdb import set_trace
-from ranger import Ranger
-import yaml
+# from ranger import Ranger
 import data as limitedData # Data
+from ranger import Ranger
+
+# Constants
+# LOG = None        
+# LR     = None            
+# EXPERIMENT_NAME   = None
+# MODEL_SAVE_PATH   = None
+# ACC_LOSS_SAVE_PATH= None
+# NUM_PL             = None
+# NUM_EPOCH          = None
+# NUM_ROUND        = None
+# MAX_ESC            = None
+# EXPERIMENT_NAME= None
+# ACC_LOSS_SAVE_PATH= None
+# MODEL_SAVE_PATH= None
+# supervisedModel_preMixup= None
+# supervisedModel_postMixup= None
+# criterionForSupervisedModel= None
+# optimizerForSupervisedModel= None
+# unsupervisedModel= None
+# mainClassifier= None
+# criterionForMainClassifier= None
+# optimizerForMainClassifier= None
+# LOG                = None
+# LR                 = None
+# NUM_PL             = None
+# NUM_EPOCH          = None
+# NUM_ROUND          = None
+# MAX_ESC    = None
+
+class NetworkA1(torch.nn.Module):
+    def __init__(self, channels):
+        super(NetworkA1, self).__init__()
+        self.net = torch.nn.Sequential(
+            torch.nn.Conv2d(channels, out_channels=16, kernel_size=(3, 3), padding=1),
+            torch.nn.ReLU(),
+            torch.nn.Conv2d(16, 16, kernel_size=(5, 5), padding=2),
+            torch.nn.ReLU(),
+            torch.nn.Conv2d(16, 32, kernel_size=(7, 7), padding=3),
+            torch.nn.ReLU(),
+            torch.nn.Conv2d(32, 32, kernel_size=(5, 5), padding=2),
+            torch.nn.ReLU(),
+            torch.nn.Conv2d(32, channels // 2, kernel_size=(1, 1)),
+            torch.nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+
+
+
+def initExperiment(config):
+    # Initialize limitedData_loader
+    limitedData.init(config)
+
+    global EXPERIMENT_NAME
+    global ACC_LOSS_SAVE_PATH
+    global MODEL_SAVE_PATH
+    global supervisedModel_preMixup
+    global supervisedModel_postMixup
+    global criterionForSupervisedModel
+    global optimizerForSupervisedModel
+    global LOG                
+    global LR                 
+    global NUM_PL             
+    global NUM_EPOCH          
+    global NUM_ROUND          
+    global MAX_ESC
+    global OPTIM
+    global accumulate_gradient
+    global train_batch
+    global train_batch_after_accumulate
+    global accumulate_iter
+    global device
+    
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    LOG = config['hp']['log']
+    LR = config['hp']['lr']
+    NUM_PL = config['hp']['num_pl']
+    NUM_EPOCH = config['hp']['num_epoch']
+    NUM_ROUND = config['hp']['num_round']
+    MAX_ESC = config['hp']['max_esc']
+    accumulate_gradient = config['hp']['accumulate_gradient']
+    train_batch = config['hp']['train_batch']
+    train_batch_after_accumulate = config['hp']['train_batch_after_accumulate']
+    accumulate_iter = int(train_batch_after_accumulate / train_batch)
+    OPTIM = config['hp']['optimizer']
+
+    tpe = pytz.timezone('Asia/Taipei')
+    EXPERIMENT_NAME = datetime.now(tpe).strftime("%Y-%m-%d %H:%M:%S")
+
+    print(limitedData.N_CLASS)
+    print(limitedData.RESIZE_SHAPE)
+    print(device)
+    supervisedModel_preMixup = Wide_ResNet_preMixup_final(28, 10, 0.2, limitedData.N_CLASS, data_shape=limitedData.RESIZE_SHAPE)
+    supervisedModel_postMixup = Wide_ResNet_postMixup_final(28, 10, 0.2, limitedData.N_CLASS, data_shape=limitedData.RESIZE_SHAPE)
+    supervisedModel_preMixup = torch.nn.DataParallel(supervisedModel_preMixup)
+    supervisedModel_postMixup = torch.nn.DataParallel(supervisedModel_postMixup)
+    if config['hp']['pretrained']:
+        checkpoint = torch.load(f'./pretrained_models/{config["hp"]["dataset"]}/Mixup/{OPTIM}/globalSupervisedModel.pth')
+        supervisedModel_preMixup.load_state_dict(checkpoint['state_dict_preMixup'])
+        supervisedModel_postMixup.load_state_dict(checkpoint['state_dict_postMixup'])
+    supervisedModel_preMixup.to(device)
+    supervisedModel_postMixup.to(device)
+
+
+    
+
+    torch.backends.cudnn.benchmark = True
+    criterionForSupervisedModel = torch.nn.CrossEntropyLoss()
+    if config['hp']['optimizer'] == 'Ranger':
+        optimizerForSupervisedModel = Ranger(list(supervisedModel_preMixup.parameters())+list(supervisedModel_postMixup.parameters()), lr=LR, alpha=0.5, k=6, N_sma_threshhold=5, betas=(.95, 0.999), eps=1e-5, weight_decay=0, use_gc=True, gc_conv_only=False)
+    else:
+        optimizerForSupervisedModel = torch.optim.Adam(list(supervisedModel_preMixup.parameters())+list(supervisedModel_postMixup.parameters()), lr=LR)
+    ACC_LOSS_SAVE_PATH = f'./records/{config["hp"]["dataset"]}/S_Mixup/{config["hp"]["optimizer"]}/{EXPERIMENT_NAME}'
+    MODEL_SAVE_PATH = f'./checkpoints/{config["hp"]["dataset"]}/S_Mixup/{config["hp"]["optimizer"]}/{EXPERIMENT_NAME}'
+    Path(ACC_LOSS_SAVE_PATH).mkdir(parents=True, exist_ok=True)
+    Path(MODEL_SAVE_PATH).mkdir(parents=True, exist_ok=True)
+    copyfile(src='./config.yaml', dst=f'{ACC_LOSS_SAVE_PATH}/config.yaml')
 
 def oneTrainSupervisedModel():
-    global supervisedModel
+
+    global supervisedModel_preMixup
+    global supervisedModel_postMixup
     global criterionForSupervisedModel
     global optimizerForSupervisedModel
     global statistics
     statistics.reset(mode="train")
-    supervisedModel.train()
-    for batch_idx, (x, y) in enumerate(limitedData.trainDataLoaderForSupervisedModel):
-        if torch.cuda.is_available(): x, y = x.cuda(), y.cuda()
-        # Forward pass
-        y_hat, _ = supervisedModel(x)
-        loss = criterionForSupervisedModel(y_hat, y.long())
+    supervisedModel_preMixup.train()
+    supervisedModel_postMixup.train()
+    # TODO
+    for batch_idx, mixup_data in enumerate(limitedData.trainDataLoaderForSupervisedModel_mixup):
+        # set_trace()
+        mixup_data_1, mixup_data_2 = mixup_data
+        x_mixup_1, y_mixup_1 = mixup_data_1
+        x_mixup_2, y_mixup_2 = mixup_data_2
+        
+        if torch.cuda.is_available(): 
+            x_mixup_1, y_mixup_1, x_mixup_2, y_mixup_2 = x_mixup_1.cuda(), y_mixup_1.cuda(), x_mixup_2.cuda(), y_mixup_2.cuda()
+ 
+        # mixup
+        rep_1 = supervisedModel_preMixup(x_mixup_1)
+        rep_2 = supervisedModel_preMixup(x_mixup_2)
+        ratio = np.random.uniform(0, 1)
+        rep_mixup = rep_1 * ratio + rep_2 * (1-ratio)
+        
+        y_rep, _ = supervisedModel_postMixup(rep_mixup)
+
+        loss_mixup = criterionForSupervisedModel(y_rep, y_mixup_1.long()) * ratio + criterionForSupervisedModel(y_rep, y_mixup_2.long()) * (1-ratio)
         if accumulate_gradient:
-            loss_accum = criterionForSupervisedModel(y_hat, y.long()) / accumulate_iter
-            loss_accum.backward()
-            if (batch_idx + 1) % accumulate_iter == 0 or batch_idx + 1 == len(limitedData.trainDataLoaderForSupervisedModel):
+            loss = loss_mixup / accumulate_iter
+            loss.backward()
+            if (batch_idx + 1) % accumulate_iter == 0 or batch_idx + 1 == len(limitedData.trainDataLoaderForSupervisedModel_mixup):
                 optimizerForSupervisedModel.step()
                 optimizerForSupervisedModel.zero_grad()
+            # Statistics   
+            statistics.numTotal += len(y_mixup_1)
+            statistics.trainLoss += loss_mixup.item()
         else:
-            loss = criterionForSupervisedModel(y_hat, y.long())
+            loss = loss_mixup # parameter for mixup loss
             # Backward pass
             loss.backward()
             optimizerForSupervisedModel.step()
             optimizerForSupervisedModel.zero_grad()
-        # Statistics
-        _, onehot = y_hat.max(1)
-        statistics.numTotal += len(y)
-        statistics.numCorrect += onehot.eq(y).sum().item()
-        statistics.trainLoss += loss.item()
-    statistics.trainAcc = statistics.numCorrect / statistics.numTotal
+        
+            # Statistics   
+            statistics.numTotal += len(y_mixup_1)
+            statistics.trainLoss += loss.item()
+
+    # statistics.trainAcc = statistics.numCorrect / statistics.numTotal
     statistics.trainLoss /= statistics.numTotal
+    
 
 def oneValSupervisedModel():
-    global supervisedModel
+    global supervisedModel_preMixup
+    global supervisedModel_postMixup
     global criterionForSupervisedModel
     global statistics
     statistics.reset(mode="val")
-    supervisedModel.eval()
+    supervisedModel_preMixup.eval()
+    supervisedModel_postMixup.eval()
     with torch.no_grad():
         for x, y in limitedData.valDataLoaderForSupervisedModel:
             if torch.cuda.is_available(): x, y = x.cuda(), y.cuda()
             # Forward pass
-            y_hat, _ = supervisedModel(x)
+            y_hat, _ = supervisedModel_postMixup(supervisedModel_preMixup(x))
             loss = criterionForSupervisedModel(y_hat, y.long())
             # Prediction
             _, onehot = y_hat.max(1)
@@ -69,19 +213,22 @@ def oneValSupervisedModel():
         statistics.valLoss /= statistics.numTotal
 
 def oneTestSupervisedModel(): 
-    global supervisedModel
+    global supervisedModel_preMixup
+    global supervisedModel_postMixup
     global criterionForSupervisedModel
     global statistics
     statistics.reset(mode="test")
     if not statistics.improved: 
         saveModel("tempSupervisedModel")
+        # TODO
         loadModel("supervisedModel")
-    supervisedModel.eval()
+    supervisedModel_preMixup.eval()
+    supervisedModel_postMixup.eval()
     with torch.no_grad():
         for x, y in limitedData.testDataLoaderForSupervisedModel:
             if torch.cuda.is_available(): x, y = x.cuda(), y.cuda()
             # Forward pass
-            y_hat, _ = supervisedModel(x)
+            y_hat, _ = supervisedModel_postMixup(supervisedModel_preMixup(x))
             loss = criterionForSupervisedModel(y_hat, y.long())
             # Prediction
             _, onehot = y_hat.max(1)
@@ -98,6 +245,7 @@ def trainSupervisedModel():
     for epoch in range(NUM_EPOCH):
         oneTrainSupervisedModel()
         oneValSupervisedModel()
+        
         if improved(model="supervisedModel", mode='local'): saveModel("supervisedModel")
         oneTestSupervisedModel()
         if shouldEarlyStop("supervisedModel"): break
@@ -106,10 +254,13 @@ def trainSupervisedModel():
 
 def saveModel(model):
     if model == 'supervisedModel' or model == "tempSupervisedModel" or model == "globalSupervisedModel":
-        global supervisedModel
+        global supervisedModel_preMixup
+        global supervisedModel_postMixup
+
         global optimizerForSupervisedModel
         checkpoint = {
-            'state_dict' : supervisedModel.state_dict(), 
+            'state_dict_preMixup' : supervisedModel_preMixup.state_dict(), 
+            'state_dict_postMixup' : supervisedModel_postMixup.state_dict(), 
             'optimizer' : optimizerForSupervisedModel.state_dict(),
             }
         torch.save(checkpoint, f'{MODEL_SAVE_PATH}/{model}.pth')
@@ -128,10 +279,12 @@ def saveModel(model):
 
 def loadModel(model):
     if model == "supervisedModel" or model == "tempSupervisedModel" or model == "globalSupervisedModel":
-        global supervisedModel
+        global supervisedModel_preMixup
+        global supervisedModel_postMixup
         global optimizerForSupervisedModel
         checkpoint = torch.load(f'{MODEL_SAVE_PATH}/{model}.pth')
-        supervisedModel.load_state_dict(checkpoint['state_dict'])
+        supervisedModel_preMixup.load_state_dict(checkpoint['state_dict_preMixup'])
+        supervisedModel_postMixup.load_state_dict(checkpoint['state_dict_postMixup'])
         optimizerForSupervisedModel.load_state_dict(checkpoint['optimizer'])
     elif model == "mainClassifier" or model == "tempMainClassifier" or model == "globalMainClassifier":
         global mainClassifier
@@ -148,6 +301,7 @@ def summaryModel(epoch, model):
     cprint(f'Val [{statistics.valAcc:.3%}]', 'magenta', end=' ')
     cprint(f'BestVal [{statistics.localBestValAcc:.3%}]', 'green', end=' ')
     cprint(f'Test [{statistics.testAcc:.3%}]', 'cyan', end=' ')
+
     if model == "supervisedModel":
         cprint(f'ESC [{statistics.earlyStopCountForSupervisedModel}/{MAX_ESC}]', end=' ')
     elif model == "mainClassifier":
@@ -198,102 +352,19 @@ def shouldEarlyStop(model):
         return True
     return False
 
-def initExperiment(config):
-    # Initialize limitedData_loader
-    limitedData.init(config)
-
-    global EXPERIMENT_NAME
-    global ACC_LOSS_SAVE_PATH
-    global MODEL_SAVE_PATH
-    global supervisedModel
-    global criterionForSupervisedModel
-    global optimizerForSupervisedModel
-    global unsupervisedModel
-    global mainClassifier
-    global criterionForMainClassifier
-    global optimizerForMainClassifier
-    global LOG                
-    global LR                 
-    global NUM_PL             
-    global NUM_EPOCH          
-    global NUM_ROUND          
-    global MAX_ESC  
-    global OPTIM 
-    global accumulate_gradient
-    global train_batch
-    global train_batch_after_accumulate
-    global accumulate_iter      
-    global device
-       
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    LOG = config['hp']['log']
-    LR = config['hp']['lr']
-    NUM_PL = config['hp']['num_pl']
-    NUM_EPOCH = config['hp']['num_epoch']
-    print(NUM_EPOCH)
-    NUM_ROUND = config['hp']['num_round']
-    MAX_ESC = config['hp']['max_esc']
-    accumulate_gradient = config['hp']['accumulate_gradient']
-    train_batch = config['hp']['train_batch']
-    train_batch_after_accumulate = config['hp']['train_batch_after_accumulate']
-    accumulate_iter = int(train_batch_after_accumulate / train_batch)
-    OPTIM = config['hp']['optimizer']
-
-
-    tpe = pytz.timezone('Asia/Taipei')
-    EXPERIMENT_NAME = datetime.now(tpe).strftime("%Y-%m-%d %H:%M:%S")
-
-    print(limitedData.N_CLASS)
-    print(limitedData.RESIZE_SHAPE)
-    print(device)
-    supervisedModel = Wide_ResNet(28, 10, 0.2, limitedData.N_CLASS, data_shape=limitedData.RESIZE_SHAPE)
-    supervisedModel = torch.nn.DataParallel(supervisedModel)
-    if config['hp']['pretrained']:
-        checkpoint = torch.load(f'./pretrained_models/{config["hp"]["dataset"]}/S/{OPTIM}/globalSupervisedModel.pth')
-        supervisedModel.load_state_dict(checkpoint['state_dict'])
-    supervisedModel.to(device)
-
-    mainClassifier = SimpleNN3(n_class=limitedData.N_CLASS, data_shape=limitedData.RESIZE_SHAPE)
-    mainClassifier.to(device)
-
-    torch.backends.cudnn.benchmark = True
-    criterionForSupervisedModel = torch.nn.CrossEntropyLoss()
-    if config['hp']['optimizer'] == 'Ranger':
-        optimizerForSupervisedModel = Ranger(supervisedModel.parameters(), lr=LR, alpha=0.5, k=6, N_sma_threshhold=5, betas=(.95, 0.999), eps=1e-5, weight_decay=0, use_gc=True, gc_conv_only=False)
-        optimizerForMainClassifier = Ranger(mainClassifier.parameters(), lr=LR, alpha=0.5, k=6, N_sma_threshhold=5, betas=(.95, 0.999), eps=1e-5, weight_decay=0, use_gc=True, gc_conv_only=False)
-    else:
-        optimizerForSupervisedModel = torch.optim.Adam(supervisedModel.parameters(), lr=LR)
-        optimizerForMainClassifier = torch.optim.Adam(mainClassifier.parameters(), lr=LR)
-
-    if config['hp']['task'] == 'mitbih':
-        unsupervisedModel = VAE_mitbih(640)
-        unsupervisedModel.to(device)
-        unsupervisedModel.load_state_dict(torch.load('./unsupervised_model_mitbih.pt'))
-    else:
-        unsupervisedModel = VAE()
-        unsupervisedModel.to(device)
-        unsupervisedModel.load_state_dict(torch.load('./best_u_model_VAE_CNN_AUG_640.pt'))
-    ACC_LOSS_SAVE_PATH = f'./records/{config["hp"]["dataset"]}/R/{config["hp"]["optimizer"]}/{EXPERIMENT_NAME}'
-    MODEL_SAVE_PATH = f'./checkpoints/{config["hp"]["dataset"]}/R/{config["hp"]["optimizer"]}/{EXPERIMENT_NAME}'
-    Path(ACC_LOSS_SAVE_PATH).mkdir(parents=True, exist_ok=True)
-    Path(MODEL_SAVE_PATH).mkdir(parents=True, exist_ok=True)
-    copyfile(src='./config.yaml', dst=f'{ACC_LOSS_SAVE_PATH}/config.yaml')
-
-    criterionForMainClassifier = torch.nn.CrossEntropyLoss()
-
 def log(model):
     global statistics
     global ACC_LOSS_SAVE_PATH
 
     if model == "supervisedModel":
         with open(f'{ACC_LOSS_SAVE_PATH}/sAcc', 'a+') as f:
-            f.write(str(statistics.trainAcc) + ',')
+            # f.write(str(statistics.trainAcc) + ',')
             f.write(str(statistics.valAcc  ) + ',')
             f.write(str(statistics.testAcc ) + '\n')
         with open(f'{ACC_LOSS_SAVE_PATH}/sLoss', 'a+') as f:
             f.write(str(statistics.trainLoss) + ',')
             f.write(str(statistics.valLoss  ) + ',')
-            f.write(str(statistics.testLoss ) + '\n')
+            f.write(str(statistics.testLoss ) + '\n')   
     elif model == "mainClassifier":
         with open(f'{ACC_LOSS_SAVE_PATH}/mAcc', 'a+') as f:
             f.write(str(statistics.trainAcc) + ',')
@@ -319,28 +390,26 @@ def oneTrainMainClassifier():
         if torch.cuda.is_available(): x, y = x.cuda(), y.cuda()
      
         # Forward pass
-        # set_trace()
-        # print("x.shape", x.shape)
-        # print("y.shape", y.shape)
         y_hat = mainClassifier(x)
+        loss = criterionForMainClassifier(y_hat, y.long())
         if accumulate_gradient:
-            loss = criterionForMainClassifier(y_hat, y.long()) / accumulate_iter
-            loss.backward()
+            loss_accum = criterionForMainClassifier(y_hat, y.long()) / accumulate_iter
+            loss_accum.backward()
             if (batch_idx + 1) % accumulate_iter == 0 or batch_idx + 1 == len(limitedData.trainDataLoaderForMainClassifier):
                 optimizerForMainClassifier.step()
                 optimizerForMainClassifier.zero_grad()
         else:
-            loss = criterionForMainClassifier(y_hat, y.long())
+            # Backward pass
+            # set_trace()
             loss.backward()
             optimizerForMainClassifier.step()
             optimizerForMainClassifier.zero_grad()
-        
         # Statistics
         _, onehot = y_hat.max(1)
         statistics.numTotal += len(y)
         statistics.numCorrect += onehot.eq(y).sum().item()
         statistics.trainLoss += loss.item()
-    #set_trace()
+    
     statistics.trainAcc = statistics.numCorrect / statistics.numTotal
     statistics.trainLoss /= statistics.numTotal
     # statistics.summary()
@@ -397,23 +466,28 @@ def trainMainClassifier():
         oneValMainClassifier()
         if improved(model="mainClassifier", mode='local'): saveModel('mainClassifier')
         if improved(model="mainClassifier", mode='global'): 
-            saveModel("globalSupervisedModel")
+            saveModel("globalSupervisedModel") # TODO: salima
             saveModel('globalMainClassifier')
         oneTestMainClassifier()
         if shouldEarlyStop("mainClassifier"): break
         summaryModel(epoch+1, "mainClassifier")
-        if LOG: log("mainClassifier")
+        if LOG: 
+            # print('123')
+            log("mainClassifier")
 
 def finalTestMainClassifier():
-    global supervisedModel
+    global supervisedModel_preMixup
+    global supervisedModel_postMixup
     global mainClassifier
     global criterionForMainClassifier
     global statistics
     statistics.reset(mode="test")
-    #loadModel("globalSupervisedModel")
+    # loadModel("globalSupervisedModel") 
     loadModel("globalMainClassifier")
-    supervisedModel.eval()
+    supervisedModel_preMixup.eval() 
+    supervisedModel_postMixup.eval() 
     mainClassifier.eval()
+    # TODO
     configDataForMainClassifier_final()
     with torch.no_grad():
         for x, y in limitedData.testDataLoaderForMainClassifier:
@@ -434,9 +508,10 @@ def finalTestMainClassifier():
     print(f'TestLoss [{statistics.testLoss:.6f}]')
 
 def buildRepresentationVectors(mode):
-    global supervisedModel
+    global supervisedModel_preMixup
+    global supervisedModel_postMixup
     global unsupervisedModel
-    loadModel("supervisedModel")
+    loadModel("supervisedModel") # TODO: salima fixed
     if mode=='train':
         imagesDataset = limitedData.MyDataset(data=limitedData.allImages, transform=limitedData.transformWithoutAffine) 
     else:
@@ -445,18 +520,18 @@ def buildRepresentationVectors(mode):
     for x in tqdm(imagesDataset):
         x = x.to(device)
         x = torch.unsqueeze(x, 0)
-        s_vec = supervisedModel(x)[1].detach().flatten().cpu().numpy()
+        s_vec = supervisedModel_postMixup(supervisedModel_preMixup(x))[1].detach().flatten().cpu().numpy()
         u_vec = unsupervisedModel(x)[1].detach().flatten().cpu().numpy()
+        # set_trace()
         vec = np.concatenate([s_vec, u_vec])
         representationVectors.append(vec)
     return np.array(representationVectors)
 
 def buildRepresentationVectors_final(mode):
-    global supervisedModel
+    global supervisedModel_preMixup
+    global supervisedModel_postMixup
     global unsupervisedModel
-    #loadModel("supervisedModel")
-    loadModel("globalSupervisedModel")
-
+    loadModel("globalSupervisedModel") # TODO: salima fixed
     if mode=='train':
         imagesDataset = limitedData.MyDataset(data=limitedData.allImages, transform=limitedData.transformWithoutAffine) 
     else:
@@ -465,11 +540,14 @@ def buildRepresentationVectors_final(mode):
     for x in tqdm(imagesDataset):
         x = x.to(device)
         x = torch.unsqueeze(x, 0)
-        s_vec = supervisedModel(x)[1].detach().flatten().cpu().numpy()
+        s_vec = supervisedModel_postMixup(supervisedModel_preMixup(x))[1].detach().flatten().cpu().numpy()
         u_vec = unsupervisedModel(x)[1].detach().flatten().cpu().numpy()
         vec = np.concatenate([s_vec, u_vec])
         representationVectors.append(vec)
     return np.array(representationVectors)
+
+
+
 
 
 
@@ -487,12 +565,12 @@ def configDataForMainClassifier():
     limitedData.testDataLoaderForMainClassifier  = DataLoader(limitedData.testDatasetForMainClassifier, batch_size=limitedData.TRAIN_BATCH, shuffle=False, num_workers=2)
 
 def configDataForMainClassifier_final():
-    limitedData.representationVectorsForTrain    = buildRepresentationVectors('train')
-    limitedData.trainDatasetForMainClassifier    = limitedData.MyDataset(limitedData.representationVectorsForTrain[limitedData.indicesOfTrainData], labels=limitedData.labelsOfTrainData)
-    limitedData.trainDataLoaderForMainClassifier = DataLoader(limitedData.trainDatasetForMainClassifier, batch_size=limitedData.TRAIN_BATCH, shuffle=True, num_workers=2)
+    # limitedData.representationVectorsForTrain    = buildRepresentationVectors('train')
+    # limitedData.trainDatasetForMainClassifier    = limitedData.MyDataset(limitedData.representationVectorsForTrain[limitedData.indicesOfTrainData], labels=limitedData.labelsOfTrainData)
+    # limitedData.trainDataLoaderForMainClassifier = DataLoader(limitedData.trainDatasetForMainClassifier, batch_size=limitedData.TRAIN_BATCH, shuffle=True, num_workers=2)
 
-    limitedData.valDatasetForMainClassifier      = limitedData.MyDataset(limitedData.representationVectorsForTrain[limitedData.indicesOfValData], labels=limitedData.labelsOfValData)
-    limitedData.valDataLoaderForMainClassifier   = DataLoader(limitedData.valDatasetForMainClassifier, batch_size=limitedData.TRAIN_BATCH, shuffle=False, num_workers=2)
+    # limitedData.valDatasetForMainClassifier      = limitedData.MyDataset(limitedData.representationVectorsForTrain[limitedData.indicesOfValData], labels=limitedData.labelsOfValData)
+    # limitedData.valDataLoaderForMainClassifier   = DataLoader(limitedData.valDatasetForMainClassifier, batch_size=limitedData.TRAIN_BATCH, shuffle=False, num_workers=2)
 
     limitedData.representationVectorsForTest     = buildRepresentationVectors_final('test')
     limitedData.testDatasetForMainClassifier     = limitedData.MyDataset(limitedData.representationVectorsForTest, labels=limitedData.labelsOfTestData)
@@ -543,8 +621,14 @@ def pseudoLabel():
     limitedData.numOfUnlabeledData -= NUM_PL
     
     # Update trainDataLoader
-    limitedData.trainDatasetForSupervisedModel = limitedData.MyDataset(limitedData.allImages[limitedData.indicesOfTrainData], transform=limitedData.transformWithAffine, labels=limitedData.labelsOfTrainData)
-    limitedData.trainDataLoaderForSupervisedModel = DataLoader(limitedData.trainDatasetForSupervisedModel, batch_size=limitedData.TRAIN_BATCH, shuffle=True,  num_workers=limitedData.NUM_WORKER)
+    # limitedData.trainDatasetForSupervisedModel = limitedData.MyDataset(limitedData.allImages[limitedData.indicesOfTrainData], transform=limitedData.transformWithAffine, labels=limitedData.labelsOfTrainData)
+    # limitedData.trainDataLoaderForSupervisedModel = DataLoader(limitedData.trainDatasetForSupervisedModel, batch_size=limitedData.TRAIN_BATCH, shuffle=True,  num_workers=limitedData.NUM_WORKER)
+
+
+    # Update trainDataLoader
+    limitedData.trainDatasetForSupervisedModel_mixup = limitedData.MyDataset_mixup(limitedData.allImages[limitedData.indicesOfTrainData], transform=limitedData.transformWithAffine, labels=limitedData.labelsOfTrainData)
+    limitedData.trainDataLoaderForSupervisedModel_mixup = DataLoader(limitedData.trainDatasetForSupervisedModel_mixup, batch_size=limitedData.TRAIN_BATCH, shuffle=True,  num_workers=limitedData.NUM_WORKER)
+
 
 def summaryRound(roundID):
     print(f'Round [{roundID}/{NUM_ROUND}]', end=' ')
@@ -557,12 +641,6 @@ def main_exp(config):
     numRound = config['hp']['num_round']
     for roundID in range(numRound+1):
         trainSupervisedModel()
-        configDataForMainClassifier()
-        trainMainClassifier()
-        if roundID != numRound: 
-            pseudoLabel()
-            summaryRound(roundID+1)
-    finalTestMainClassifier()
     plot()
 
 def plot():
@@ -576,33 +654,21 @@ def plot():
     mapper = {0:'train', 1:'val', 2:'test'}
 
     sAcc = np.loadtxt(f'{fname}/sAcc', delimiter=',')
-    ax = fig.add_subplot(2, 2, 1)
+    ax = fig.add_subplot(2, 1, 1)
     ax.set_ylim(0-delta, 1+delta)
-    for i in range(3):
-        ax.plot(sAcc[:,i], label=mapper[i])
+    for i in range(2):
+        ax.plot(sAcc[:,i], label=mapper[i+1])
         ax.set_title('Supervised Model Acc')
         ax.legend()
     
-    mAcc = np.loadtxt(f'{fname}/mAcc', delimiter=',')
-    ax = fig.add_subplot(2, 2, 2)
-    ax.set_ylim(0-delta, 1+delta)
-    for i in range(3):
-        ax.plot(mAcc[:,i])
-        ax.set_title('Main Classifier Acc')
-    
     sLoss = np.loadtxt(f'{fname}/sLoss', delimiter=',')
-    ax = fig.add_subplot(2, 2, 3)
+    ax = fig.add_subplot(2, 1, 2)
     ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
     for i in range(3):
         ax.plot(sLoss[:,i])
         ax.set_title('Supervised Model Loss')
     
-    mLoss = np.loadtxt(f'{fname}/mLoss', delimiter=',')
-    ax = fig.add_subplot(2, 2, 4)
-    ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
-    for i in range(3):
-        ax.plot(mLoss[:,i])
-        ax.set_title('Main Classifier Loss')
+    print(f'{int(statistics.testAcc*1e4)}')
     plt.savefig(f'{ACC_LOSS_SAVE_PATH}/{int(statistics.testAcc*1e4)}')
     plt.close()
 

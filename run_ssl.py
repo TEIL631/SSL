@@ -2,6 +2,7 @@ import yaml
 import S
 import P
 import R
+import S_Mixup
 import R_Mixup
 import R_SA_Mixup
 
@@ -17,6 +18,8 @@ for _ in range(repeat_times):
         R.main(config)
     elif task == 'P':
         P.main(config)
+    elif task = 'S_Mixup':
+        S_Mixup.main(config)
     elif task == 'R_Mixup':
         R_Mixup.main(config)
     elif task == 'R_SA_Mixup':

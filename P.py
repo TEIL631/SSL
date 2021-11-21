@@ -201,7 +201,7 @@ def shouldEarlyStop(model):
     return False
 
 def initExperiment(config):
-    limitedData.init()
+    limitedData.init(config)
 
     global EXPERIMENT_NAME
     global ACC_LOSS_SAVE_PATH

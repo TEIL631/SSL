@@ -70,7 +70,7 @@ class NetworkA1(torch.nn.Module):
 
 def initExperiment(config):
     # Initialize limitedData_loader
-    limitedData.init()
+    limitedData.init(config)
 
     global EXPERIMENT_NAME
     global ACC_LOSS_SAVE_PATH

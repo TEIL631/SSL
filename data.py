@@ -81,8 +81,8 @@ class MyDataset_mixup(Dataset):
     def __len__(self):
         return len(self.data)
 
-def init():
-    config = yaml.load(open('./config.yaml', 'r'), Loader=yaml.FullLoader)
+def init(config):
+    # config = yaml.load(open('./config.yaml', 'r'), Loader=yaml.FullLoader)
     dataset = config['hp']['dataset']
     # print(config)
     # Constants
