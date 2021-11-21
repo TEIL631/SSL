@@ -336,7 +336,7 @@ def initExperiment(config):
     supervisedModel_preMixup = torch.nn.DataParallel(supervisedModel_preMixup)
     supervisedModel_postMixup = torch.nn.DataParallel(supervisedModel_postMixup)
     if config['hp']['pretrained']:
-        checkpoint = torch.load(config['path']['pretrained_mixup'])
+        checkpoint = torch.load(f'./pretrained_models/{config["hp"]["dataset"]}/Mixup/{OPTIM}/globalSupervisedModel.pth')
         supervisedModel_preMixup.load_state_dict(checkpoint['state_dict_preMixup'])
         supervisedModel_postMixup.load_state_dict(checkpoint['state_dict_postMixup'])
     supervisedModel_preMixup.to(device)
