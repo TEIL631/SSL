@@ -16,6 +16,7 @@ from pathlib import Path
 from ipdb import set_trace
 # from ranger import Ranger
 import data as limitedData # Data
+from ranger import Ranger
 
 # Constants
 # LOG = None        
