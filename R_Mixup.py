@@ -119,16 +119,19 @@ def initExperiment(config):
     supervisedModel_postMixup = Wide_ResNet_postMixup_final(28, 10, 0.2, limitedData.N_CLASS, data_shape=limitedData.RESIZE_SHAPE)
     supervisedModel_preMixup = torch.nn.DataParallel(supervisedModel_preMixup)
     supervisedModel_postMixup = torch.nn.DataParallel(supervisedModel_postMixup)
+    mainClassifier = SimpleNN3(n_class=limitedData.N_CLASS, data_shape=limitedData.RESIZE_SHAPE)
     if config['hp']['pretrained']:
         checkpoint = torch.load(f'./pretrained_models/{config["hp"]["dataset"]}/Mixup/{OPTIM}/globalSupervisedModel.pth')
         supervisedModel_preMixup.load_state_dict(checkpoint['state_dict_preMixup'])
         supervisedModel_postMixup.load_state_dict(checkpoint['state_dict_postMixup'])
+        checkpoint_main = torch.load(f'./pretrained_models/{config["hp"]["dataset"]}/Mixup/{OPTIM}/globalMainClassifier.pth')
+        mainClassifier.load_state_dict(checkpoint_main['state_dict'])
     supervisedModel_preMixup.to(device)
     supervisedModel_postMixup.to(device)
-
-
-    mainClassifier = SimpleNN3(n_class=limitedData.N_CLASS, data_shape=limitedData.RESIZE_SHAPE)
     mainClassifier.to(device)
+
+
+    
 
     torch.backends.cudnn.benchmark = True
     criterionForSupervisedModel = torch.nn.CrossEntropyLoss()
