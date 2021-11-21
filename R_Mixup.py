@@ -116,6 +116,8 @@ def initExperiment(config):
     print(device)
     supervisedModel_preMixup = Wide_ResNet_preMixup_final(28, 10, 0.2, limitedData.N_CLASS, data_shape=limitedData.RESIZE_SHAPE)
     supervisedModel_postMixup = Wide_ResNet_postMixup_final(28, 10, 0.2, limitedData.N_CLASS, data_shape=limitedData.RESIZE_SHAPE)
+    supervisedModel_preMixup = torch.nn.DataParallel(supervisedModel_preMixup)
+    supervisedModel_postMixup = torch.nn.DataParallel(supervisedModel_postMixup)
     if config['hp']['pretrained']:
         checkpoint = torch.load(config['path']['pretrained_mixup'])
         supervisedModel_preMixup.load_state_dict(checkpoint['state_dict_preMixup'])
@@ -123,8 +125,6 @@ def initExperiment(config):
     supervisedModel_preMixup.to(device)
     supervisedModel_postMixup.to(device)
 
-    supervisedModel_preMixup = torch.nn.DataParallel(supervisedModel_preMixup)
-    supervisedModel_postMixup = torch.nn.DataParallel(supervisedModel_postMixup)
 
     mainClassifier = SimpleNN3(n_class=limitedData.N_CLASS, data_shape=limitedData.RESIZE_SHAPE)
     mainClassifier.to(device)
@@ -709,6 +709,7 @@ def plot():
     plt.close()
 
 def main(config=None):
+    statistics.init()
     initExperiment(config)
     print("BATCH_SIZE = ", limitedData.TRAIN_BATCH)
     print("NUM_EPOCH = ", NUM_EPOCH)
