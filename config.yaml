@@ -6,18 +6,18 @@
 #############################
 
 hp:
-  # types of task: S/P/R/R_Mixup/R_SA_Mixup
-  task: 'P'
+  # types of task: S/P/R/S_Mixup/R_Mixup/R_SA_Mixup
+  task: 'S'
 
   # Dataset: wm811k/mitbih
   dataset: 'wm811k'
 
-  repeat_times: 5
+  repeat_times: 1
 
   # 
   # s model
-  n_epoch_for_s_model: 20 #300
-  max_esc_for_s_model: 20 #100
+  n_epoch_for_s_model: -1 #300
+  max_esc_for_s_model: -1 #100
 
   # pl model
   n_epoch_for_pl_model: 300
@@ -32,17 +32,17 @@ hp:
   pl_threshold: 0
   
   # optimizer:adam/Ranger, lr:0.0001/0.001
-  optimizer: 'Ranger'
-  lr: 0.001
+  optimizer: 'adam'
+  lr: 0.0001
 
-  weight_decay: 0.0005
+  weight_decay: 0
   drop_out: 0.2
   momentum: 0.9
 
   # Batch
-  accumulate_gradient: true
-  train_batch: 8
-  val_batch: 8
+  accumulate_gradient: false
+  train_batch: 64
+  val_batch: 64
   # matters if only accumulate_gradient is true, should be a dividend of train/val batch.
   train_batch_after_accumulate: 64
   n_worker: 2
@@ -53,10 +53,10 @@ hp:
   h_mitbih: 128  
   
   log: true                              
-  num_pl: 300             
-  num_epoch: 300         
-  num_round: 5          
-  max_esc: 300
+  num_pl: 10            
+  num_epoch: 20        
+  num_round: 0       
+  max_esc: 20
 
   alpha: 0.2
   beta: 0.8

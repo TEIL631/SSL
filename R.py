@@ -277,8 +277,9 @@ def initExperiment(config):
     MODEL_SAVE_PATH = f'./checkpoints/{config["hp"]["dataset"]}/R/{config["hp"]["optimizer"]}/{EXPERIMENT_NAME}'
     Path(ACC_LOSS_SAVE_PATH).mkdir(parents=True, exist_ok=True)
     Path(MODEL_SAVE_PATH).mkdir(parents=True, exist_ok=True)
-    copyfile(src='./config.yaml', dst=f'{ACC_LOSS_SAVE_PATH}/config.yaml')
-
+    # copyfile(src='./config.yaml', dst=f'{ACC_LOSS_SAVE_PATH}/config.yaml')
+    with open(f'{ACC_LOSS_SAVE_PATH}/config.yaml', 'w') as outfile:
+        yaml.dump(config, outfile)
     criterionForMainClassifier = torch.nn.CrossEntropyLoss()
 
 def log(model):
@@ -607,6 +608,9 @@ def plot():
     plt.close()
 
 def main(config=None):
+    seed = np.random.randint(1000)
+    setup_seed(seed)
+    config['seed'] = seed
     statistics.init()
     initExperiment(config)
     print("BATCH_SIZE = ", limitedData.TRAIN_BATCH)
