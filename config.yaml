@@ -7,12 +7,12 @@
 
 hp:
   # types of task: S/P/R/S_Mixup/R_Mixup/R_SA_Mixup
-  task: 'S'
+  task: 'P'
 
   # Dataset: wm811k/mitbih
-  dataset: 'wm811k'
+  dataset: 'mitbih'
 
-  repeat_times: 1
+  repeat_times: 5
 
   # 
   # s model
@@ -31,18 +31,18 @@ hp:
   pl_n_limit: 10000
   pl_threshold: 0
   
-  # optimizer:adam/Ranger, lr:0.0001/0.001
-  optimizer: 'adam'
-  lr: 0.0001
+  # optimizer:adam/Ranger/SGD, lr:0.0001/0.001/0.1
+  optimizer: 'Ranger'
+  lr: 0.001
 
-  weight_decay: 0
+  weight_decay: 0.0005
   drop_out: 0.2
   momentum: 0.9
 
   # Batch
-  accumulate_gradient: false
-  train_batch: 64
-  val_batch: 64
+  accumulate_gradient: True
+  train_batch: 8
+  val_batch: 8
   # matters if only accumulate_gradient is true, should be a dividend of train/val batch.
   train_batch_after_accumulate: 64
   n_worker: 2
@@ -53,15 +53,16 @@ hp:
   h_mitbih: 128  
   
   log: true                              
-  num_pl: 10            
-  num_epoch: 20        
-  num_round: 0       
-  max_esc: 20
+  num_pl_epoch: 10            
+  num_epoch: 300       
+  num_round: 5
+  esc_round: 5      
+  max_esc: 300
 
   alpha: 0.2
   beta: 0.8
 
-  pretrained: false
+  pretrained: False
 path:
   # Wide-Resnet
   # s_model_pretrained: 'models_pretrained/s_model_balance.pth'
@@ -86,3 +87,5 @@ path:
   # test_label_list_mitbih: 'data/MITBIH2/test_2D_500_label_values.npy'
 
   # traintools.py, loaders.py -> revise path to this file if needed
+BestVal_each_round:
+TestAcc_each_round:

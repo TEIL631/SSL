@@ -84,12 +84,14 @@ class MyDataset_mixup(Dataset):
 def init(config):
     # config = yaml.load(open('./config.yaml', 'r'), Loader=yaml.FullLoader)
     dataset = config['hp']['dataset']
+
     # print(config)
     # Constants
     global N_CLASS
     global RESIZE_SHAPE
     global TRAIN_BATCH
     global VAL_BATCH
+    global TRAIN_BATCH_MAIN_CLASSIFIER
     global NUM_WORKER
     global PATH_ALL_IMAGES
     global PATH_INDICES_OF_TRAIN_DATA
@@ -124,7 +126,11 @@ def init(config):
         PATH_LABELS_OF_VAL_DATA     = "./WM811K/val_labels"
         PATH_TEST_IMAGES            = "./WM811K/test_700_data.npy"
         PATH_LABELS_OF_TEST_DATA    = "./WM811K/test_700_label_values.npy"
-
+    if config['hp']['accumulate_gradient']:
+        TRAIN_BATCH_MAIN_CLASSIFIER = config['hp']['train_batch_after_accumulate']
+    else:
+        TRAIN_BATCH_MAIN_CLASSIFIER = TRAIN_BATCH
+    print('TRAIN_BATCH_MAIN_CLASSIFIER',TRAIN_BATCH_MAIN_CLASSIFIER)
     # All data
     global allImages; allImages = np.load(PATH_ALL_IMAGES, allow_pickle=True)
     global numOfAllData; numOfAllData = len(allImages)
