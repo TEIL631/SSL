@@ -16,6 +16,7 @@ from pathlib import Path
 from ipdb import set_trace
 from ranger import Ranger
 import data as limitedData # Data
+import random
 
 
 class NetworkA1(torch.nn.Module):
@@ -37,6 +38,12 @@ class NetworkA1(torch.nn.Module):
     def forward(self, x):
         return self.net(x)
 
+def setup_seed(seed):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.deterministic = True
 
 def oneTrainSupervisedModel():
     global net_a
@@ -289,7 +296,8 @@ def initExperiment(config):
     global criterionForMainClassifier
     global optimizerForMainClassifier
     global LOG                
-    global LR                 
+    global LR 
+    global PL_RATE                
     global NUM_PL             
     global NUM_EPOCH          
     global NUM_ROUND          
@@ -306,7 +314,8 @@ def initExperiment(config):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     LOG = config['hp']['log']
     LR = config['hp']['lr']
-    NUM_PL = config['hp']['num_pl']
+    PL_RATE  = config['hp']['pl_rate']
+    NUM_PL = int(limitedData.numOfLabeledData * PL_RATE)
     NUM_EPOCH = config['hp']['num_epoch']
     print(NUM_EPOCH)
     NUM_ROUND = config['hp']['num_round']
@@ -355,7 +364,7 @@ def initExperiment(config):
         optimizerForSupervisedModel = torch.optim.Adam(list(supervisedModel_preMixup.parameters())+list(supervisedModel_postMixup.parameters()), lr=LR)
         optimizerForMainClassifier = torch.optim.Adam(mainClassifier.parameters(), lr=LR)
 
-    if config['hp']['task'] == 'mitbih':
+    if config['hp']['dataset'] == 'mitbih':
         unsupervisedModel = VAE_mitbih(640)
         unsupervisedModel.to(device)
         unsupervisedModel.load_state_dict(torch.load('./unsupervised_model_mitbih.pt'))
@@ -594,7 +603,7 @@ def configDataForMainClassifier_final():
 
     limitedData.representationVectorsForTest     = buildRepresentationVectors_final('test')
     limitedData.testDatasetForMainClassifier     = limitedData.MyDataset(limitedData.representationVectorsForTest, labels=limitedData.labelsOfTestData)
-    limitedData.testDataLoaderForMainClassifier  = DataLoader(limitedData.testDatasetForMainClassifier, batch_size=limitedData.TRAIN_BATCH, shuffle=False, num_workers=2)
+    limitedData.testDataLoaderForMainClassifier  = DataLoader(limitedData.testDatasetForMainClassifier, batch_size=limitedData.TRAIN_BATCH_MAIN_CLASSIFIER, shuffle=False, num_workers=2)
 
 
 

@@ -7,7 +7,7 @@
 
 hp:
   # types of task: S/P/R/S_Mixup/R_Mixup/R_SA_Mixup
-  task: 'P'
+  task: 'R_SA_Mixup'
 
   # Dataset: wm811k/mitbih
   dataset: 'mitbih'
@@ -41,8 +41,8 @@ hp:
 
   # Batch
   accumulate_gradient: True
-  train_batch: 8
-  val_batch: 8
+  train_batch: 4
+  val_batch: 4
   # matters if only accumulate_gradient is true, should be a dividend of train/val batch.
   train_batch_after_accumulate: 64
   n_worker: 2
