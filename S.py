@@ -115,6 +115,9 @@ def trainSupervisedModel():
         if shouldEarlyStop("supervisedModel"): break
         summaryModel(epoch+1, "supervisedModel")
         if LOG: log("supervisedModel")
+        if OPTIM == 'SGD':
+            scheduler_s.step()
+            print(f'Scheduler step')
 
 def saveModel(model):
     if model == 'supervisedModel' or model == "tempSupervisedModel" or model == "globalSupervisedModel":
@@ -221,6 +224,9 @@ def initExperiment(config):
     global optimizerForSupervisedModel
     global LOG                
     global LR
+    global WEIGHT_DECAY
+    global MOMENTUM
+    global scheduler_s
     global OPTIM                 
     global NUM_PL             
     global NUM_EPOCH          
@@ -230,47 +236,60 @@ def initExperiment(config):
     global train_batch
     global train_batch_after_accumulate
     global accumulate_iter 
+    global pretrained
+    global TASK
+
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     LOG = config['hp']['log']
     LR = config['hp']['lr']
-    NUM_PL = config['hp']['num_pl']
+    WEIGHT_DECAY = config['hp']['weight_decay']
+    MOMENTUM = config['hp']['momentum']
     NUM_EPOCH = config['hp']['num_epoch']
     print(NUM_EPOCH)
-    NUM_ROUND = config['hp']['num_round']
     MAX_ESC = config['hp']['max_esc']
     accumulate_gradient = config['hp']['accumulate_gradient']
     train_batch = config['hp']['train_batch']
     train_batch_after_accumulate = config['hp']['train_batch_after_accumulate']
     accumulate_iter = int(train_batch_after_accumulate / train_batch)
+    OPTIM = config['hp']['optimizer']
+    TASK = config['hp']['task']
+    pretrained = config['hp']['pretrained']
 
     tpe = pytz.timezone('Asia/Taipei')
     EXPERIMENT_NAME = datetime.now(tpe).strftime("%Y-%m-%d %H:%M:%S")
-
-    OPTIM = config['hp']['optimizer']
 
     print(limitedData.N_CLASS)
     print(limitedData.RESIZE_SHAPE)
     print(device)
     supervisedModel = Wide_ResNet(28, 10, 0.2, limitedData.N_CLASS, data_shape=limitedData.RESIZE_SHAPE)
-    if config['hp']['pretrained']:
-        checkpoint = torch.load(config['path']['pretrained_S'])
-        supervisedModel.load_state_dict(checkpoint['state_dict'])
-    supervisedModel.to(device)
     supervisedModel = torch.nn.DataParallel(supervisedModel)
+    if pretrained:
+        print('load models')
+        checkpoint = torch.load(f'./pretrained_models/{config["hp"]["dataset"]}/S/{OPTIM}/globalSupervisedModel.pth')
+        #print(checkpoint['state_dict'])
+        try: 
+            supervisedModel.load_state_dict(checkpoint['state_dict'])
+        except Exception as e:
+            print(e)
+    
+    supervisedModel.to(device)
 
     torch.backends.cudnn.benchmark = True
     criterionForSupervisedModel = torch.nn.CrossEntropyLoss()
-    if config['hp']['optimizer'] == 'Ranger':
+    if OPTIM == 'Ranger':
         optimizerForSupervisedModel = Ranger(supervisedModel.parameters(), lr=LR, alpha=0.5, k=6, N_sma_threshhold=5, betas=(.95, 0.999), eps=1e-5, weight_decay=0, use_gc=True, gc_conv_only=False)
-    else:
+    elif OPTIM == 'Adam':
         optimizerForSupervisedModel = torch.optim.Adam(supervisedModel.parameters(), lr=LR)
-    ACC_LOSS_SAVE_PATH = f'./records/{config["hp"]["dataset"]}/S/{config["hp"]["optimizer"]}/{EXPERIMENT_NAME}'
-    MODEL_SAVE_PATH = f'./checkpoints/{config["hp"]["dataset"]}/S/{config["hp"]["optimizer"]}/{EXPERIMENT_NAME}'
+    elif OPTIM == 'SGD':
+        optimizerForSupervisedModel = torch.optim.SGD(supervisedModel.parameters(), lr=LR,momentum=MOMENTUM, weight_decay=WEIGHT_DECAY)
+        scheduler_s = torch.optim.lr_scheduler.CosineAnnealingLR(optimizerForSupervisedModel, T_max=NUM_EPOCH)
+    ACC_LOSS_SAVE_PATH = f'./records/{config["hp"]["dataset"]}/{TASK}/{OPTIM}/{EXPERIMENT_NAME}'
+    MODEL_SAVE_PATH = f'./checkpoints/{config["hp"]["dataset"]}/{TASK}/{OPTIM}/{EXPERIMENT_NAME}'
     Path(ACC_LOSS_SAVE_PATH).mkdir(parents=True, exist_ok=True)
     Path(MODEL_SAVE_PATH).mkdir(parents=True, exist_ok=True)
     # copyfile(src='./config.yaml', dst=f'{ACC_LOSS_SAVE_PATH}/config.yaml')
-    with open(f'{ACC_LOSS_SAVE_PATH}/config.yaml', 'w') as outfile:
-        yaml.dump(config, outfile)
+    # with open(f'{ACC_LOSS_SAVE_PATH}/config.yaml', 'w') as outfile:
+    #     yaml.dump(config, outfile)
 
 def log(model):
     global statistics
@@ -321,74 +340,14 @@ def finalTestsupervisedModel():
         statistics.testLoss /= statistics.numTotal
     
     print('\n---------------------------------- Summary ---------------------------------')
+    print(f'BestVal  [{statistics.globalBestValAcc:.3%}]')
     print(f'TestAcc  [{statistics.testAcc:.3%}]')
     print(f'TestLoss [{statistics.testLoss:.6f}]')
 
 
-
-def pseudoLabel():
-    global supervisedModel
-    global NUM_PL
-
-    # limitedData.unlabeledDataset    = limitedData.MyDataset(limitedData.representationVectorsForTrain[limitedData.indicesOfUnabeledData])
-    limitedData.unlabeledDataset    = limitedData.MyDataset(limitedData.allImages[limitedData.indicesOfUnabeledData],transform=limitedData.transformWithAffine)
-    # print(len(limitedData.unlabeledDataset))
-    limitedData.unlabeledDataLoader = DataLoader(limitedData.unlabeledDataset, batch_size=limitedData.VAL_BATCH, shuffle=False, num_workers=2)
-    # print(len(limitedData.unlabeledDataLoader))
-    supervisedModel.eval()
-    confidenceList = np.array([])
-    predictedLabelList = np.array([])
-    with torch.no_grad():
-        for x in limitedData.unlabeledDataLoader:
-            if torch.cuda.is_available(): x = x.cuda()
-            y_hat, _  = supervisedModel(x)
-            confidence, predictedLabels = y_hat.max(1)
-            confidence = confidence.detach().cpu().numpy()
-            predictedLabels = predictedLabels.detach().cpu().numpy()
-            confidenceList = np.append(arr=confidenceList, values=confidence)
-            predictedLabelList = np.append(arr=predictedLabelList, values=predictedLabels)
-
-    NUM_PL = min(len(confidenceList), NUM_PL)
-    indicesOfTopK = np.argpartition(confidenceList, -NUM_PL)[-NUM_PL:]
-    
-    indicesOfPseudolabeledData = limitedData.indicesOfUnabeledData[indicesOfTopK]
-    labelsOfPseudolabeledData  = predictedLabelList[indicesOfTopK]
-    
-    # Update train
-    limitedData.indicesOfTrainData   = np.append(arr=limitedData.indicesOfTrainData, values=indicesOfPseudolabeledData)
-    limitedData.labelsOfTrainData    = np.append(arr=limitedData.labelsOfTrainData, values=labelsOfPseudolabeledData).astype(np.int64)
-    limitedData.numOfTrainData += NUM_PL
-    
-    # Update labeled
-    limitedData.indicesOfLabeledData = np.append(arr=limitedData.indicesOfLabeledData, values=indicesOfPseudolabeledData)
-    limitedData.labelsOfLabeledData  = np.append(arr=limitedData.labelsOfLabeledData, values=labelsOfPseudolabeledData).astype(np.int64)
-    limitedData.numOfLabeledData += NUM_PL
-    
-    # Update unlabeled
-    mask = np.ones(limitedData.numOfAllData, dtype=bool)
-    mask[limitedData.indicesOfLabeledData] = False
-    limitedData.indicesOfUnabeledData = np.arange(limitedData.numOfAllData)[mask]
-    limitedData.numOfUnlabeledData -= NUM_PL
-    
-    # Update trainDataLoader
-    limitedData.trainDatasetForSupervisedModel = limitedData.MyDataset(limitedData.allImages[limitedData.indicesOfTrainData], transform=limitedData.transformWithAffine, labels=limitedData.labelsOfTrainData)
-    limitedData.trainDataLoaderForSupervisedModel = DataLoader(limitedData.trainDatasetForSupervisedModel, batch_size=limitedData.TRAIN_BATCH, shuffle=True,  num_workers=limitedData.NUM_WORKER)
-
-def summaryRound(roundID):
-    print(f'Round [{roundID}/{NUM_ROUND}]', end=' ')
-    print(f'numLabeled [{limitedData.numOfLabeledData}]', end=' ')
-    print(f'numUnlabeled [{limitedData.numOfUnlabeledData}]', end=' ')
-    print(f'numTrain [{limitedData.numOfTrainData}]', end=' ')
-    print(f'+{NUM_PL}\n')
-
 def main_exp(config):
-    val_round =[]
-    test_round = []
-    numRound = config['hp']['num_round']
-    for roundID in range(numRound+1):
-        trainSupervisedModel()
-        val_round.append(round(statistics.localBestValAcc*100,3)) #statistics.testAcc
-        test_round.append(round(statistics.testAcc*100,3)) #statistics.testAcc
+    trainSupervisedModel()
+    finalTestsupervisedModel()
     if LOG: plot()
 
 def plot():
@@ -396,7 +355,7 @@ def plot():
     fname = f'{ACC_LOSS_SAVE_PATH}'
     fig = plt.figure(figsize=(12, 9))
     
-    title = f'Acc[{statistics.testAcc:.2%}] OPT[{OPTIM}] LR[{LR}] Batch[{limitedData.TRAIN_BATCH}] EPOCH[{NUM_EPOCH}] PL[{NUM_PL}/{NUM_ROUND}]\n{EXPERIMENT_NAME}'
+    title = f'BestVal[{statistics.globalBestValAcc:.3%}] Acc[{statistics.testAcc:.2%}] OPT[{OPTIM}] LR[{LR}] Batch[{limitedData.TRAIN_BATCH}] EPOCH[{NUM_EPOCH}] \n{EXPERIMENT_NAME}'
     fig.suptitle(title)
     
     mapper = {0:'train', 1:'val', 2:'test'}
@@ -440,15 +399,17 @@ def main(config):
     initExperiment(config)
     print("BATCH_SIZE = ", limitedData.TRAIN_BATCH)
     print("NUM_EPOCH = ", NUM_EPOCH)
-    print("NUM_ROUND = ", NUM_ROUND)
     print("MAX_ESC = ", MAX_ESC)
+    print("OPTIMIZER = ", OPTIM)
     print("Learning_rate = ", LR)
     main_exp(config)
+    with open(f'{ACC_LOSS_SAVE_PATH}/config.yaml', 'w') as outfile:
+        yaml.dump(config, outfile)
     # plot()
     print("BATCH_SIZE", limitedData.TRAIN_BATCH)
     print("NUM_EPOCH = ", NUM_EPOCH)
-    print("NUM_ROUND = ", NUM_ROUND)
     print("MAX_ESC = ", MAX_ESC)
+    print("OPTIMIZER = ", OPTIM)
     print("Learning_rate = ", LR)
 
 if __name__ == '__main__':

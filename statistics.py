@@ -14,6 +14,7 @@ def init():
     global globalBestValAcc; globalBestValAcc                                 = 0
     global earlyStopCountForSupervisedModel; earlyStopCountForSupervisedModel = 0
     global earlyStopCountForMainClassifier; earlyStopCountForMainClassifier   = 0
+    global earlyStopCountForTrainingRound; earlyStopCountForTrainingRound     = 0
     global improved; improved                                                 = False
     
 
@@ -34,6 +35,7 @@ def initRound():
     global localBestValAcc; localBestValAcc                                   = 0
     global earlyStopCountForSupervisedModel; earlyStopCountForSupervisedModel = 0
     global earlyStopCountForMainClassifier; earlyStopCountForMainClassifier   = 0
+    global earlyStopCountForTrainingRound; earlyStopCountForTrainingRound     = 0
     global improved; improved                                                 = False
 
 def summary():
