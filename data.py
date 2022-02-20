@@ -1,36 +1,62 @@
 import numpy as np
 from torch.utils.data import DataLoader, Dataset
 import torchvision.transforms as transforms
-import yaml
 
-N_CLASS = None
+# ---------------------------------------------------------------------------- #
+#                               GLOBAL VARIABLES                               #
+# ---------------------------------------------------------------------------- #
+
+# data info
+N_CLASS      = None
 RESIZE_SHAPE = None
+
+# batch
 TRAIN_BATCH = None
-VAL_BATCH = None
+VAL_BATCH   = None
+
+# parallel computation
 NUM_WORKER = None
-PATH_ALL_IMAGES = None
+
+# paths
+PATH_ALL_IMAGES            = None
 PATH_INDICES_OF_TRAIN_DATA = None
-PATH_LABELS_OF_TRAIN_DATA = None
-PATH_INDICES_OF_VAL_DATA = None
-PATH_LABELS_OF_VAL_DATA = None
-PATH_TEST_IMAGES = None
-PATH_LABELS_OF_TEST_DATA = None
-transformWithAffine = None
+PATH_LABELS_OF_TRAIN_DATA  = None
+PATH_INDICES_OF_VAL_DATA   = None
+PATH_LABELS_OF_VAL_DATA    = None
+PATH_TEST_IMAGES           = None
+PATH_LABELS_OF_TEST_DATA   = None
+
+# image transformation
+transformWithAffine    = None
 transformWithoutAffine = None
 
 class MyDataset(Dataset):
     def __init__(self, data, transform=None, **kwargs):
         self.data = data
+        
+        # for training or testing
         self.labels = kwargs["labels"] if "labels" in kwargs else None
+        
+        # data transformation
         self.transform = transform
+    
     def __getitem__(self, index):
+        
+        # get the data
         x = self.data[index]
-        if self.transform is not None: x = self.transform(x)
-        if self.labels is not None: return x, self.labels[index]
-        else: return x
+        
+        # preprocess the data
+        if self.transform is not None: 
+            x = self.transform(x)
+        
+        # get one item: (data) or (data, label)
+        if self.labels is not None: 
+            return x, self.labels[index]
+        else: 
+            return x
+    
     def __len__(self):
         return len(self.data)
-
 
 class MyDataset_SA(Dataset):
     def __init__(self, data, transform=None, **kwargs):
@@ -48,15 +74,10 @@ class MyDataset_SA(Dataset):
             
             x_list.append(self.data[idx])
             current_index.append(idx)
-
         if self.transform != None:
             x_list = [self.transform(x) for x in x_list]
-
         if self.labels is not None: return x_list, self.labels[index]
         else: return x_list
-            
-
-        
     def __len__(self):
         return len(self.data)
 
@@ -75,24 +96,29 @@ class MyDataset_mixup(Dataset):
         if self.transform is not None: 
             x1 = self.transform(x1)
             x2 = self.transform(x2)
-        
         return (x1, self.labels[index_1]), (x2, self.labels[index_2])
-        
     def __len__(self):
         return len(self.data)
 
 def init(config):
-    # config = yaml.load(open('./config.yaml', 'r'), Loader=yaml.FullLoader)
-    dataset = config['hp']['dataset']
 
-    # print(config)
-    # Constants
+    # ---------------------------------------------------------------------------- #
+    #                                BASIC CONSTANTS                               #
+    # ---------------------------------------------------------------------------- #
+    
+    # data info
     global N_CLASS
     global RESIZE_SHAPE
+    
+    # batch
     global TRAIN_BATCH
     global VAL_BATCH
     global TRAIN_BATCH_MAIN_CLASSIFIER
+    
+    # parallel computation
     global NUM_WORKER
+    
+    # paths
     global PATH_ALL_IMAGES
     global PATH_INDICES_OF_TRAIN_DATA
     global PATH_LABELS_OF_TRAIN_DATA
@@ -100,101 +126,132 @@ def init(config):
     global PATH_LABELS_OF_VAL_DATA
     global PATH_TEST_IMAGES
     global PATH_LABELS_OF_TEST_DATA
+    
+    # ---------------------------------------------------------------------------- #
+    #                             LOAD DATA FROM FILES                             #
+    # ---------------------------------------------------------------------------- #
+    
+    dataset = config['hp']['dataset']
+
+    # the mitbih dataset
     if dataset == 'mitbih':
-        N_CLASS = 5
-        RESIZE_SHAPE = (128, 128)
-        TRAIN_BATCH = config['hp']['train_batch']
-        VAL_BATCH = config['hp']['val_batch']
-        NUM_WORKER = 2
+        N_CLASS                    = 5
+        RESIZE_SHAPE               = (128, 128)
+        TRAIN_BATCH                = config['hp']['train_batch']
+        VAL_BATCH                  = config['hp']['val_batch']
+        NUM_WORKER                 = 2
         PATH_ALL_IMAGES            = 'MITBIH/train_data_2D_2000.npy'
-        PATH_INDICES_OF_TRAIN_DATA  = "MITBIH/train_2000_10p_label_indices.npy"
+        PATH_INDICES_OF_TRAIN_DATA = "MITBIH/train_2000_10p_label_indices.npy"
         PATH_LABELS_OF_TRAIN_DATA  = "MITBIH/train_2000_10p_label_values.npy"
-        PATH_INDICES_OF_VAL_DATA    = "MITBIH/val_2000_10p_label_indices.npy"
-        PATH_LABELS_OF_VAL_DATA     = "MITBIH/val_2000_10p_label_values.npy"
-        PATH_TEST_IMAGES            = 'MITBIH/test_data_2D_500.npy'
-        PATH_LABELS_OF_TEST_DATA    = 'MITBIH/test_2D_500_label_values.npy'
+        PATH_INDICES_OF_VAL_DATA   = "MITBIH/val_2000_10p_label_indices.npy"
+        PATH_LABELS_OF_VAL_DATA    = "MITBIH/val_2000_10p_label_values.npy"
+        PATH_TEST_IMAGES           = 'MITBIH/test_data_2D_500.npy'
+        PATH_LABELS_OF_TEST_DATA   = 'MITBIH/test_2D_500_label_values.npy'
+    
+    # the wm811k dataset
     else:
-        N_CLASS = 7
-        RESIZE_SHAPE = (32, 32)
-        TRAIN_BATCH = config['hp']['train_batch']
-        VAL_BATCH = config['hp']['val_batch']
-        NUM_WORKER = 2
+        N_CLASS                    = 7
+        RESIZE_SHAPE               = (32, 32)
+        TRAIN_BATCH                = config['hp']['train_batch']
+        VAL_BATCH                  = config['hp']['val_batch']
+        NUM_WORKER                 = 2
         PATH_ALL_IMAGES            = "./WM811K/train_3150_data.npy"
-        PATH_INDICES_OF_TRAIN_DATA  = "./WM811K/train_indices"
-        PATH_LABELS_OF_TRAIN_DATA   = "./WM811K/train_labels"
-        PATH_INDICES_OF_VAL_DATA    = "./WM811K/val_indices"
-        PATH_LABELS_OF_VAL_DATA     = "./WM811K/val_labels"
-        PATH_TEST_IMAGES            = "./WM811K/test_700_data.npy"
-        PATH_LABELS_OF_TEST_DATA    = "./WM811K/test_700_label_values.npy"
+        PATH_INDICES_OF_TRAIN_DATA = "./WM811K/train_indices"
+        PATH_LABELS_OF_TRAIN_DATA  = "./WM811K/train_labels"
+        PATH_INDICES_OF_VAL_DATA   = "./WM811K/val_indices"
+        PATH_LABELS_OF_VAL_DATA    = "./WM811K/val_labels"
+        PATH_TEST_IMAGES           = "./WM811K/test_700_data.npy"
+        PATH_LABELS_OF_TEST_DATA   = "./WM811K/test_700_label_values.npy"
+    
     if config['hp']['accumulate_gradient']:
         TRAIN_BATCH_MAIN_CLASSIFIER = config['hp']['train_batch_after_accumulate']
     else:
         TRAIN_BATCH_MAIN_CLASSIFIER = TRAIN_BATCH
-    print('TRAIN_BATCH_MAIN_CLASSIFIER',TRAIN_BATCH_MAIN_CLASSIFIER)
-    # All data
+    
+    # all data
     global allImages; allImages = np.load(PATH_ALL_IMAGES, allow_pickle=True)
     global numOfAllData; numOfAllData = len(allImages)
 
-    # --------------------------- FOR SUPERVISED MODEL --------------------------- #
+    # ---------------------------------------------------------------------------- #
+    #                             FOR SUPERVISED MODEL                             #
+    # ---------------------------------------------------------------------------- #
     
-    # Train data
+    # train data
     global indicesOfTrainData; indicesOfTrainData = np.load(PATH_INDICES_OF_TRAIN_DATA, allow_pickle = True)
     global labelsOfTrainData; labelsOfTrainData   = np.load(PATH_LABELS_OF_TRAIN_DATA, allow_pickle = True)
     global numOfTrainData; numOfTrainData         = len(indicesOfTrainData)
 
-    # Val data
+    # valid data
     global indicesOfValData; indicesOfValData = np.load(PATH_INDICES_OF_VAL_DATA, allow_pickle = True)
     global labelsOfValData; labelsOfValData   = np.load(PATH_LABELS_OF_VAL_DATA,  allow_pickle = True)
     global numOfValData; numOfValData         = len(indicesOfValData)
  
-    # Labeled data = train + val
+    # labeled data = train + valid
     global indicesOfLabeledData; indicesOfLabeledData = np.concatenate([indicesOfTrainData, indicesOfValData]) # 315
     global numOfLabeledData; numOfLabeledData         = len(indicesOfLabeledData);
     global labelsOfLabeledData; labelsOfLabeledData   = np.concatenate([labelsOfTrainData, labelsOfValData])
 
-    # Unlabeled data = all - labeled
+    # unlabeled data = all - labeled
     mask = np.ones(numOfAllData, dtype=bool)
     mask[indicesOfLabeledData] = False
     global indicesOfUnabeledData; indicesOfUnabeledData = np.arange(numOfAllData)[mask]
     global numOfUnlabeledData; numOfUnlabeledData       = len(indicesOfUnabeledData)
 
-    # Test data
+    # test data
     global testImages; testImages             = np.load(PATH_TEST_IMAGES,         allow_pickle=True)
     global labelsOfTestData; labelsOfTestData = np.load(PATH_LABELS_OF_TEST_DATA, allow_pickle=True)
     global numOfTestData; numOfTestData       = len(testImages)
 
     global transformWithAffine; transformWithAffine = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Resize(RESIZE_SHAPE),
-    transforms.RandomHorizontalFlip(),
-    transforms.RandomVerticalFlip(),
-    transforms.RandomRotation(30),
-    transforms.Normalize((0.0/255), (2.0/255))
+        
+        # numpy to tensor for gpu computation
+        transforms.ToTensor(),
+        
+        # resize images to speed up computation
+        transforms.Resize(RESIZE_SHAPE),
+        
+        # basic image transformation
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomVerticalFlip(),
+        transforms.RandomRotation(30),
+        
+        # image normalization
+        transforms.Normalize((0.0/255), (2.0/255))
     ])
 
     global transformWithoutAffine; transformWithoutAffine = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Resize(RESIZE_SHAPE),
-    transforms.Normalize((0.0/255), (2.0/255))
+        
+        # numpy to tensor for gpu computation
+        transforms.ToTensor(),
+        
+        # resize images to speed up computation
+        transforms.Resize(RESIZE_SHAPE),
+
+        # image normalization
+        transforms.Normalize((0.0/255), (2.0/255))
     ])
 
-    # Dataset
-    # global trainDatasetForSupervisedModel; trainDatasetForSupervisedModel     = MyDataset(allImages,  transform=transformWithAffine,    labels=labelsOfTrainData, indicesOfData=indicesOfTrainData)
-    # global valDatasetForSupervisedModel;   valDatasetForSupervisedModel       = MyDataset(allImages,  transform=transformWithoutAffine, labels=labelsOfValData,   indicesOfData=indicesOfValData)
-    global trainDatasetForSupervisedModel; trainDatasetForSupervisedModel             = MyDataset(allImages[indicesOfTrainData],  transform=transformWithAffine,    labels=labelsOfTrainData)
-    global trainDatasetForSupervisedModel_SA; trainDatasetForSupervisedModel_SA       = MyDataset_SA(allImages[indicesOfTrainData],  transform=transformWithAffine,    labels=labelsOfTrainData)
-    global trainDatasetForSupervisedModel_mixup; trainDatasetForSupervisedModel_mixup = MyDataset_mixup(allImages[indicesOfTrainData],  transform=transformWithAffine,    labels=labelsOfTrainData)
-    global valDatasetForSupervisedModel;   valDatasetForSupervisedModel               = MyDataset(allImages[indicesOfValData],  transform=transformWithoutAffine, labels=labelsOfValData)
+    # ---------------------------------------------------------------------------- #
+    #                                  DATALOADER                                  #
+    # ---------------------------------------------------------------------------- #
+    
+    # dataset
+    global trainDatasetForSupervisedModel; trainDatasetForSupervisedModel             = MyDataset(allImages[indicesOfTrainData], transform=transformWithAffine, labels=labelsOfTrainData)
+    global trainDatasetForSupervisedModel_SA; trainDatasetForSupervisedModel_SA       = MyDataset_SA(allImages[indicesOfTrainData], transform=transformWithAffine, labels=labelsOfTrainData)
+    global trainDatasetForSupervisedModel_mixup; trainDatasetForSupervisedModel_mixup = MyDataset_mixup(allImages[indicesOfTrainData], transform=transformWithAffine, labels=labelsOfTrainData)
+    global valDatasetForSupervisedModel;   valDatasetForSupervisedModel               = MyDataset(allImages[indicesOfValData], transform=transformWithoutAffine, labels=labelsOfValData)
     global testDatasetForSupervisedModel;  testDatasetForSupervisedModel              = MyDataset(testImages, transform=transformWithoutAffine, labels=labelsOfTestData)
 
-    # Dataloader
+    # dataloader
     global trainDataLoaderForSupervisedModel; trainDataLoaderForSupervisedModel                 = DataLoader(trainDatasetForSupervisedModel, batch_size=TRAIN_BATCH, shuffle=True,  num_workers=NUM_WORKER)
     global trainDataLoaderForSupervisedModel_SA; trainDataLoaderForSupervisedModel_SA           = DataLoader(trainDatasetForSupervisedModel_SA, batch_size=TRAIN_BATCH, shuffle=True,  num_workers=NUM_WORKER)
     global trainDataLoaderForSupervisedModel_mixup; trainDataLoaderForSupervisedModel_mixup     = DataLoader(trainDatasetForSupervisedModel_mixup, batch_size=TRAIN_BATCH, shuffle=True,  num_workers=NUM_WORKER)
     global valDataLoaderForSupervisedModel;   valDataLoaderForSupervisedModel                   = DataLoader(valDatasetForSupervisedModel,   batch_size=VAL_BATCH,   shuffle=False, num_workers=NUM_WORKER)
     global testDataLoaderForSupervisedModel;  testDataLoaderForSupervisedModel                  = DataLoader(testDatasetForSupervisedModel,  batch_size=VAL_BATCH,   shuffle=False, num_workers=NUM_WORKER)
 
-    # ---------------------------- FOR MAIN CLASSIFIER --------------------------- #
+    # ---------------------------------------------------------------------------- #
+    #                           CONFIGURE MAIN CLASSIFIER                          #
+    # ---------------------------------------------------------------------------- #
 
     # Dataset and dataloader
     global representationVectorsForTrain   ; representationVectorsForTrain    = None
