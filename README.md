@@ -38,6 +38,8 @@
 1. Curriculum-Labeling
 2. EnAET
 
+Note: These two methods have little progress. Please git clone them and start from scartch.
+
 # Models we use
 
 In R.py and its variant, there are three models:
