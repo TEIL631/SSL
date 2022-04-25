@@ -3,7 +3,7 @@
 Download datasets from NAS:
 
 * Username: SSL
-* Password: Teil@631
+* Password: As usual (Capitalized)
 
 # Files description
 
