@@ -50,4 +50,4 @@ In R.py and its variant, there are three models:
 2. One model for prediction
     3. Called the main classifier -> SimpleNN1 and SimpleNN3 in pl_model.py
 
-Note: In S.py, there are only one model: the supervised model (Wide_ResNet), which at the same time is the model for prediction.
+Note: In S.py, there is only one model: the supervised model (Wide_ResNet), which at the same time is the model for prediction.
