@@ -1,5 +1,7 @@
-/checkpoints/*
-/records/*
-__pycache__/*
-MITBIH/*
-/models/__pycache__/*
+/checkpoints/
+/records/
+__pycache__/
+/MITBIH/
+/models/__pycache__/
+Curriculum-Labeling/
+/EnAET/
