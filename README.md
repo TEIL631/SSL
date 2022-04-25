@@ -1,3 +1,10 @@
+# Download datasets
+
+Download datasets from NAS:
+
+* Username: SSL
+* Password: Teil@631
+
 # Files description
 
 ## Python files
